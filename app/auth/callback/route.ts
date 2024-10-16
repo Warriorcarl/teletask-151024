@@ -2,23 +2,38 @@ import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
-  // The `/auth/callback` route is required for the server-side auth flow implemented
-  // by the SSR package. It exchanges an auth code for the user's session.
-  // https://supabase.com/docs/guides/auth/server-side/nextjs
   const requestUrl = new URL(request.url);
-  const code = requestUrl.searchParams.get("code");
-  const origin = requestUrl.origin;
-  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString();
+  const code = requestUrl.searchParams.get("code"); // Ambil kode otorisasi dari URL
+  const origin = requestUrl.origin; // URL asal
+  const redirectTo = requestUrl.searchParams.get("redirect_to")?.toString(); // URL pengalihan setelah proses
 
   if (code) {
     const supabase = createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+
+    // Menukar kode otorisasi dengan token sesi dari Telegram
+    const { session, error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    // Simpan token Telegram di Supabase
+    const { data, error: tokenError } = await supabase
+      .from('telegram_tokens')
+      .insert({
+        user_id: session.user.id, // Mengaitkan token dengan ID user di Supabase
+        token: session.access_token,
+        created_at: new Date()
+      });
+
+    if (tokenError) {
+      return NextResponse.json({ error: tokenError.message }, { status: 500 });
+    }
   }
 
   if (redirectTo) {
     return NextResponse.redirect(`${origin}${redirectTo}`);
   }
 
-  // URL to redirect to after sign up process completes
   return NextResponse.redirect(`${origin}/protected`);
 }
