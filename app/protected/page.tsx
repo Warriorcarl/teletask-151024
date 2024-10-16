@@ -6,17 +6,24 @@ import { useState, useEffect } from "react";
 import { createClient as createClientClient } from "@/utils/supabase/client"; // Supabase client for frontend
 import { User } from "@supabase/supabase-js"; // Import User type from Supabase
 
+// Definisikan tipe Channel (opsional)
+type Channel = {
+  id: number;
+  channel_name: string;
+  channel_url: string;
+};
+
 export default function ProtectedPage() {
   const supabaseClient = createClientClient(); // Initialize client for fetching/updating channels
 
   // State untuk input, channel, dan notifikasi
-  const [channels, setChannels] = useState([]); // Untuk menyimpan daftar channel
-  const [channelInput, setChannelInput] = useState({ name: "", url: "" }); // Untuk form input channel baru
-  const [keyword, setKeyword] = useState(""); // Untuk kata kunci filter pesan
-  const [filteredMessages, setFilteredMessages] = useState([]); // Pesan yang sudah difilter
-  const [loading, setLoading] = useState(true); // State loading untuk pengambilan data
+  const [channels, setChannels] = useState<Channel[]>([]); // Tipe array of Channel
+  const [channelInput, setChannelInput] = useState({ name: "", url: "" });
+  const [keyword, setKeyword] = useState("");
+  const [filteredMessages, setFilteredMessages] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null); // State untuk user yang sedang login
-  const [notification, setNotification] = useState({ message: "", type: "" }); // Untuk notifikasi
+  const [notification, setNotification] = useState({ message: "", type: "" });
 
   // Mengambil user yang sedang login
   useEffect(() => {
