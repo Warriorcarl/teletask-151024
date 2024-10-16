@@ -25,6 +25,9 @@ export default function ProtectedPage() {
   const [user, setUser] = useState<User | null>(null); // State untuk user yang sedang login
   const [notification, setNotification] = useState({ message: "", type: "" });
 
+  // Regex untuk memvalidasi URL Telegram
+  const telegramUrlPattern = /^https:\/\/t\.me\/[a-zA-Z0-9_]{5,}$/;
+
   // Mengambil user yang sedang login
   useEffect(() => {
     const fetchUser = async () => {
@@ -69,6 +72,12 @@ export default function ProtectedPage() {
   const handleAddChannel = async () => {
     if (!channelInput.name || !channelInput.url) {
       setNotification({ message: "Channel name and URL are required", type: "error" });
+      return;
+    }
+
+    // Validasi URL Telegram
+    if (!telegramUrlPattern.test(channelInput.url)) {
+      setNotification({ message: "Please enter a valid Telegram channel URL (e.g., https://t.me/channelusername)", type: "error" });
       return;
     }
 
@@ -119,7 +128,7 @@ export default function ProtectedPage() {
   };
 
   // Fungsi untuk menghapus channel
-  const handleDeleteChannel = async (channelId) => {
+  const handleDeleteChannel = async (channelId: number) => {
     const { error } = await supabaseClient
       .from("channels")
       .delete()
@@ -195,7 +204,7 @@ export default function ProtectedPage() {
         <input
           type="text"
           name="name"
-          placeholder="Channel Name"
+          placeholder="e.g., Channel Name"
           value={channelInput.name}
           onChange={(e) => setChannelInput({ ...channelInput, name: e.target.value })}
           className="input p-2 border border-gray-300 rounded w-full mb-2 focus:outline-none focus:ring focus:border-blue-300"
@@ -203,7 +212,7 @@ export default function ProtectedPage() {
         <input
           type="text"
           name="url"
-          placeholder="Channel URL"
+          placeholder="e.g., https://t.me/channelusername"
           value={channelInput.url}
           onChange={(e) => setChannelInput({ ...channelInput, url: e.target.value })}
           className="input p-2 border border-gray-300 rounded w-full mb-4 focus:outline-none focus:ring focus:border-blue-300"
