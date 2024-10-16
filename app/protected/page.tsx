@@ -4,18 +4,19 @@ import FetchDataSteps from "@/components/tutorial/fetch-data-steps";
 import { InfoIcon } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createClient as createClientClient } from "@/utils/supabase/client"; // Supabase client for frontend
+import { User } from "@supabase/supabase-js"; // Import User type from Supabase
 
 export default function ProtectedPage() {
   const supabaseClient = createClientClient(); // Initialize client for fetching/updating channels
 
   // State untuk input, channel, dan notifikasi
-  const [channels, setChannels] = useState([]);
-  const [channelInput, setChannelInput] = useState({ name: "", url: "" });
-  const [keyword, setKeyword] = useState("");
-  const [filteredMessages, setFilteredMessages] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null); // State untuk user yang sedang login
-  const [notification, setNotification] = useState({ message: "", type: "" }); // Notifikasi
+  const [channels, setChannels] = useState([]); // Untuk menyimpan daftar channel
+  const [channelInput, setChannelInput] = useState({ name: "", url: "" }); // Untuk form input channel baru
+  const [keyword, setKeyword] = useState(""); // Untuk kata kunci filter pesan
+  const [filteredMessages, setFilteredMessages] = useState([]); // Pesan yang sudah difilter
+  const [loading, setLoading] = useState(true); // State loading untuk pengambilan data
+  const [user, setUser] = useState<User | null>(null); // State untuk user yang sedang login
+  const [notification, setNotification] = useState({ message: "", type: "" }); // Untuk notifikasi
 
   // Mengambil user yang sedang login
   useEffect(() => {
@@ -35,13 +36,15 @@ export default function ProtectedPage() {
   // Fungsi untuk mengambil channel dari Supabase
   const fetchChannels = async () => {
     setLoading(true);
+    if (!user) return; // Hanya lanjutkan jika user sudah ada
     const { data, error } = await supabaseClient
       .from("channels")
       .select("*")
       .eq("user_id", user?.id); // Pastikan hanya mengambil channel milik user yang sedang login
 
     if (error) {
-      console.error(error);
+      console.error("Error fetching channels:", error);
+      setNotification({ message: "Error fetching channels", type: "error" });
     } else {
       setChannels(data); // Update state dengan data channel
     }
@@ -67,37 +70,44 @@ export default function ProtectedPage() {
       return;
     }
 
-    // Validasi apakah URL sudah ada di database, meskipun dengan nama berbeda
-    const { data: existingChannels, error: checkError } = await supabaseClient
-      .from("channels")
-      .select("*")
-      .eq("user_id", user.id)
-      .eq("channel_url", channelInput.url); // Validasi berdasarkan URL
+    try {
+      // Validasi apakah URL sudah ada di database, meskipun dengan nama berbeda
+      const { data: existingChannels, error: checkError } = await supabaseClient
+        .from("channels")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("channel_url", channelInput.url); // Validasi berdasarkan URL
 
-    if (checkError) {
-      setNotification({ message: "Error checking existing channels", type: "error" });
-      return;
-    }
+      if (checkError) {
+        console.error("Error checking existing channels:", checkError);
+        setNotification({ message: "Error checking existing channels", type: "error" });
+        return;
+      }
 
-    if (existingChannels.length > 0) {
-      // Jika ada channel dengan URL yang sama, tampilkan pesan error
-      setNotification({ message: "This URL already exists in your channels", type: "error" });
-      return;
-    }
+      if (existingChannels.length > 0) {
+        // Jika ada channel dengan URL yang sama, tampilkan pesan error
+        setNotification({ message: "This URL already exists in your channels", type: "error" });
+        return;
+      }
 
-    // Tambahkan channel jika tidak ada duplikasi URL
-    const { error } = await supabaseClient.from("channels").insert({
-      user_id: user.id, // Pastikan `user_id` disertakan dalam query insert
-      channel_name: channelInput.name,
-      channel_url: channelInput.url,
-    });
+      // Tambahkan channel jika tidak ada duplikasi URL
+      const { error } = await supabaseClient.from("channels").insert({
+        user_id: user.id, // Pastikan `user_id` disertakan dalam query insert
+        channel_name: channelInput.name,
+        channel_url: channelInput.url,
+      });
 
-    if (error) {
-      setNotification({ message: "Error adding channel: " + error.message, type: "error" });
-    } else {
-      setChannelInput({ name: "", url: "" });
-      setNotification({ message: "Channel added successfully", type: "success" });
-      fetchChannels(); // Panggil ulang fungsi fetchChannels untuk mengambil data terbaru
+      if (error) {
+        console.error("Error adding channel:", error);
+        setNotification({ message: "Error adding channel: " + error.message, type: "error" });
+      } else {
+        setChannelInput({ name: "", url: "" });
+        setNotification({ message: "Channel added successfully", type: "success" });
+        fetchChannels(); // Panggil ulang fungsi fetchChannels untuk mengambil data terbaru
+      }
+    } catch (err) {
+      console.error("Unexpected error:", err);
+      setNotification({ message: "Unexpected error occurred", type: "error" });
     }
   };
 
@@ -109,6 +119,7 @@ export default function ProtectedPage() {
       .eq("id", channelId);
 
     if (error) {
+      console.error("Error deleting channel:", error);
       setNotification({ message: "Error deleting channel: " + error.message, type: "error" });
     } else {
       setNotification({ message: "Channel deleted successfully", type: "success" });
@@ -126,15 +137,28 @@ export default function ProtectedPage() {
 
   // Fungsi untuk filter pesan berdasarkan kata kunci
   const fetchFilteredMessages = async () => {
-    const { data, error } = await supabaseClient
-      .from("telegram_messages")
-      .select("*")
-      .ilike("message_content", `%${keyword}%`);
+    if (!keyword.trim()) {
+      setNotification({ message: "Please enter a keyword to filter messages.", type: "error" });
+      return;
+    }
 
-    if (error) {
-      console.error("Error fetching messages: ", error);
-    } else {
-      setFilteredMessages(data);
+    try {
+      const { data, error } = await supabaseClient
+        .from("telegram_messages")
+        .select("*")
+        .ilike("message_content", `%${keyword}%`);
+
+      if (error) {
+        console.error("Error fetching messages:", error);
+        setNotification({ message: "Error fetching messages", type: "error" });
+      } else if (data.length === 0) {
+        setNotification({ message: "No messages found for the given keyword", type: "info" });
+      } else {
+        setFilteredMessages(data);
+      }
+    } catch (err) {
+      console.error("Unexpected error fetching messages:", err);
+      setNotification({ message: "Unexpected error fetching messages", type: "error" });
     }
   };
 
