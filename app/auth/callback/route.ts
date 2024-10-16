@@ -11,14 +11,20 @@ export async function GET(request: Request) {
     const supabase = createClient();
 
     // Menukar kode otorisasi dengan token sesi dari Telegram
-    const { session, error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
+    const session = data?.session; // Ambil sesi dari data yang dikembalikan
+
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 400 });
+    }
+
     // Simpan token Telegram di Supabase
-    const { data, error: tokenError } = await supabase
+    const { data: tokenData, error: tokenError } = await supabase
       .from('telegram_tokens')
       .insert({
         user_id: session.user.id, // Mengaitkan token dengan ID user di Supabase
